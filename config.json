@@ -1,0 +1,7 @@
+{
+    "EnabledProviders": {
+        "openai": true,
+        "anthropic": true,
+        "gemini": true
+    }
+}

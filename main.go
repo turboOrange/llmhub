@@ -6,42 +6,37 @@ import (
     "flag"
     "fmt"
     "os"
+    "strings"
     "sync"
     "time"
 
-    "go.uber.org/zap"
     "github.com/joho/godotenv"
+    "go.uber.org/zap"
 )
 
-// Provider interface for LLMs
 type Provider interface {
     Name() string
     Enabled() bool
     Query(ctx context.Context, prompt string, extra map[string]string) (string, error)
 }
 
-// Example implementation for OpenAI (stub)
 type OpenAIProvider struct {
     enabled bool
     apiKey  string
 }
 
-func (o *OpenAIProvider) Name() string         { return "openai" }
-func (o *OpenAIProvider) Enabled() bool        { return o.enabled }
+func (o *OpenAIProvider) Name() string  { return "openai" }
+func (o *OpenAIProvider) Enabled() bool { return o.enabled }
 func (o *OpenAIProvider) Query(ctx context.Context, prompt string, extra map[string]string) (string, error) {
-    // TODO: Call OpenAI API here using o.apiKey
+    // TODO: Integrate with OpenAI API using o.apiKey
     return "OpenAI answer to: " + prompt, nil
 }
 
-// Config: only enable/disable
 type Config struct {
     EnabledProviders map[string]bool
     Debug            bool
 }
 
-// ---------- Functions ----------
-
-// Loads configuration from file
 func loadConfig(path string) (*Config, error) {
     f, err := os.Open(path)
     if err != nil {
@@ -56,23 +51,16 @@ func loadConfig(path string) (*Config, error) {
     return &cfg, nil
 }
 
-// Loads API keys from environment
 func loadAPIKeys(providerNames []string) map[string]string {
     apiKeys := make(map[string]string)
     for _, name := range providerNames {
-        envKey := fmt.Sprintf("%s_API_KEY", toEnvKey(name))
+        envKey := fmt.Sprintf("%s_API_KEY", strings.ToUpper(name))
         apiKey := os.Getenv(envKey)
         apiKeys[name] = apiKey
     }
     return apiKeys
 }
 
-// Helper: convert provider name to ENV format (e.g. "openai" -> "OPENAI")
-func toEnvKey(name string) string {
-    return strings.ToUpper(name)
-}
-
-// Initializes logger based on debug flag
 func setupLogger(debug bool) (*zap.Logger, error) {
     loggerCfg := zap.NewProductionConfig()
     if debug {
@@ -81,11 +69,10 @@ func setupLogger(debug bool) (*zap.Logger, error) {
     return loggerCfg.Build()
 }
 
-// Returns a list of enabled providers
 func getEnabledProviders(cfg *Config, apiKeys map[string]string) []Provider {
     allProviders := []Provider{
         &OpenAIProvider{enabled: cfg.EnabledProviders["openai"], apiKey: apiKeys["openai"]},
-        // Add more providers here, e.g. AnthropicProvider, GeminiProvider
+        // Add more providers here
     }
     enabled := []Provider{}
     for _, p := range allProviders {
@@ -96,7 +83,6 @@ func getEnabledProviders(cfg *Config, apiKeys map[string]string) []Provider {
     return enabled
 }
 
-// Queries all enabled providers concurrently
 func queryProviders(ctx context.Context, providers []Provider, prompt string, logger *zap.Logger) (map[string]string, map[string]error) {
     var wg sync.WaitGroup
     mu := sync.Mutex{}
@@ -123,7 +109,6 @@ func queryProviders(ctx context.Context, providers []Provider, prompt string, lo
     return results, errs
 }
 
-// Finds the summarizer provider by name
 func findSummarizerProvider(providers []Provider, name string) Provider {
     for _, p := range providers {
         if p.Name() == name && p.Enabled() {
@@ -133,7 +118,6 @@ func findSummarizerProvider(providers []Provider, name string) Provider {
     return nil
 }
 
-// Summarizes all answers using the chosen provider
 func summarizeAnswers(ctx context.Context, provider Provider, answers map[string]string, logger *zap.Logger) (string, error) {
     prompt := "Summarize and provide a verdict for these answers:\n"
     for name, answer := range answers {
@@ -142,8 +126,6 @@ func summarizeAnswers(ctx context.Context, provider Provider, answers map[string
     logger.Info("Passing answers to summarizer", zap.String("provider", provider.Name()))
     return provider.Query(ctx, prompt, nil)
 }
-
-// ---------- Main ----------
 
 func main() {
     prompt := flag.String("prompt", "", "Prompt to send to LLMs")
@@ -178,7 +160,6 @@ func main() {
         os.Exit(1)
     }
 
-    // Get API keys from env
     providerNames := make([]string, 0, len(cfg.EnabledProviders))
     for name := range cfg.EnabledProviders {
         providerNames = append(providerNames, name)
